@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Mock Header",
+  "version": "0.1.0",
+  "description": "按 Profile 和 URL 范围设置请求 Header。",
+  "minimum_chrome_version": "145",
+  "permissions": [
+    "storage",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Mock Header",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-disabled-16.png",
+      "32": "icons/icon-disabled-32.png",
+      "48": "icons/icon-disabled-48.png",
+      "128": "icons/icon-disabled-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
