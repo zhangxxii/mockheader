@@ -180,6 +180,34 @@ function prepareProfileForValidation(profile: Profile): Profile {
   };
 }
 
+function draftMatchesPersistedProfile(
+  draftProfile: Profile,
+  persistedProfile: Profile | undefined,
+): boolean {
+  if (!persistedProfile) return false;
+  try {
+    const normalizedDraft = validateAndNormalizeProfile(
+      prepareProfileForValidation(draftProfile),
+    );
+    const comparableDraft = cloneProfile(draftProfile);
+    // Only the two multiline scope editors keep their raw presentation.
+    // Other fields retain the original exact-change autosave semantics.
+    comparableDraft.pageDomains = normalizedDraft.pageDomains;
+    comparableDraft.requestUrlPatterns = normalizedDraft.requestUrlPatterns;
+    return sameProfile(comparableDraft, persistedProfile);
+  } catch {
+    return false;
+  }
+}
+
+function preserveEditableScopeLists(normalized: Profile, editable: Profile): Profile {
+  return {
+    ...cloneProfile(normalized),
+    pageDomains: [...editable.pageDomains],
+    requestUrlPatterns: [...editable.requestUrlPatterns],
+  };
+}
+
 function nextProfileName(profiles: Profile[]): string {
   const names = new Set(profiles.map(({ name }) => name.trim()));
   if (!names.has('新 Profile')) return '新 Profile';
@@ -307,7 +335,9 @@ export function App() {
     baselineProfile && draft && baselineProfile.id === draft.profile.id
       ? baselineProfile
       : undefined;
-  const dirty = Boolean(draft && (draft.isNew || !sameProfile(draft.profile, originalProfile)));
+  const dirty = Boolean(
+    draft && (draft.isNew || !draftMatchesPersistedProfile(draft.profile, originalProfile)),
+  );
   draftRef.current = draft;
   dirtyRef.current = dirty;
 
@@ -417,12 +447,11 @@ export function App() {
         const canRestore = restoredIsNew
           ? true
           : Boolean(currentProfile && restoredBaseline?.id === savedProfile.id);
-        const snapshotIsDirty = restoredIsNew || !sameProfile(
-          savedProfile,
-          restoredBaseline ?? undefined,
-        );
+        const snapshotIsDirty =
+          restoredIsNew ||
+          !draftMatchesPersistedProfile(savedProfile, restoredBaseline ?? undefined);
         const draftAlreadySaved = Boolean(
-          currentProfile && sameProfile(currentProfile, savedProfile),
+          currentProfile && draftMatchesPersistedProfile(savedProfile, currentProfile),
         );
 
         if (canRestore && snapshotIsDirty && !draftAlreadySaved) {
@@ -590,7 +619,7 @@ export function App() {
       if (!currentDraft) return;
       const needsBackup =
         currentDraft.isNew ||
-        !sameProfile(
+        !draftMatchesPersistedProfile(
           currentDraft.profile,
           baseline?.id === currentDraft.profile.id ? baseline : undefined,
         );
@@ -745,30 +774,35 @@ export function App() {
           const currentDraft = draftRef.current;
           const stillEditingProfile = currentDraft?.profile.id === normalizedProfile.id;
           const hasNewerEdit = stillEditingProfile && draftRevisionRef.current !== revision;
+          const currentMatchesSaved = Boolean(
+            stillEditingProfile &&
+            currentDraft &&
+            draftMatchesPersistedProfile(currentDraft.profile, normalizedProfile),
+          );
 
           setConfig(normalizedConfig);
           pendingExternalConfigRef.current = null;
           setExternalChangePending(false);
           if (stillEditingProfile) {
             baselineProfileRef.current = cloneProfile(normalizedProfile);
-            if (hasNewerEdit && currentDraft) {
-              const nextDraft = { ...currentDraft, isNew: false };
-              draftRef.current = nextDraft;
-              setDraft(nextDraft);
-            } else {
+            if (currentDraft) {
+              // Keep the editable representation (including intentional blank
+              // lines) in the Popup. Only the persisted baseline is normalized.
               const nextDraft = {
                 isNew: false,
-                profile: cloneProfile(normalizedProfile),
+                profile: hasNewerEdit
+                  ? currentDraft.profile
+                  : preserveEditableScopeLists(normalizedProfile, currentDraft.profile),
               };
               draftRef.current = nextDraft;
               setDraft(nextDraft);
-              await clearStoredDraft();
             }
+            if (currentMatchesSaved) await clearStoredDraft();
           }
 
           await syncAfterSave();
           setAutosaveState(
-            hasNewerEdit
+            stillEditingProfile && !currentMatchesSaved
               ? { status: 'pending', error: null }
               : { status: 'saved', error: null },
           );
@@ -796,7 +830,7 @@ export function App() {
         const baseline = baselineProfileRef.current;
         const needsSave =
           currentDraft.isNew ||
-          !sameProfile(
+          !draftMatchesPersistedProfile(
             currentDraft.profile,
             baseline?.id === currentDraft.profile.id ? baseline : undefined,
           );

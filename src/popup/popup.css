@@ -375,6 +375,7 @@ textarea:disabled {
 .profile-name-input {
   min-width: 0;
   padding: 0 9px;
+  color: var(--text-secondary);
 }
 
 .profile-name-input:hover:not(:disabled),
@@ -725,13 +726,16 @@ textarea:disabled {
   min-width: 0;
   height: 27px;
   padding: 0 6px;
-  color: var(--text);
+  color: var(--text-secondary);
   font-size: 10px;
 }
 
 .cell-input.mono {
-  color: var(--text-secondary);
   font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.candidate-row.is-active .cell-input {
+  color: var(--text);
 }
 
 .row-action {
